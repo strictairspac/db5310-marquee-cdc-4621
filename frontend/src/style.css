@@ -74,6 +74,11 @@ td { border-top:1px solid var(--line); min-width: 3.3rem; max-width: 35ch; }
 .empty { margin:0; padding:1.3rem; color:var(--muted); background:var(--soft); }
 summary { cursor:pointer; font-weight:600; color:var(--accent-dark); }
 .digest { word-break:break-all; }
+tr.row-conflict td { background: oklch(.95 .04 28); }
+tr.row-conflict td:first-child { border-inline-start: 3px solid oklch(.62 .16 27); }
+tr.row-applied td:first-child { border-inline-start: 3px solid oklch(.62 .13 150); }
+tr.row-pending td { color: var(--muted); }
+tr.row-duplicate td:first-child { border-inline-start: 3px solid var(--line); }
 @media (min-width: 1280px) { .inspection .panel:has(> pre) { max-width: 65ch; } }
 @media (max-width: 1000px) {
   .workspace { display: block; }

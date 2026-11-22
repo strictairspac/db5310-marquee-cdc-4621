@@ -1,9 +1,9 @@
 import {esc} from '../../utils/dom.js';
 
-export function records(headers, body, empty='当前没有记录。') {
+export function records(headers, body, empty='当前没有记录。', rowClasses=[]) {
   if (!body.length) return `<p class="empty">${esc(empty)}</p>`;
   return `<div class="table-scroll" data-wide="${headers.length > 8}"><table><thead><tr>${headers.map(x=>`<th scope="col">${esc(x)}</th>`).join('')}</tr></thead><tbody>
-  ${body.map(row=>`<tr>${row.map(x=>`<td>${x}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  ${body.map((row,index)=>`<tr${rowClasses[index]?` class="${esc(rowClasses[index])}"`:''}>${row.map(x=>`<td>${x}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
 
 function readable(value) {

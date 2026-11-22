@@ -168,7 +168,7 @@ def _offset_row(stream, offset, waiting):
             '阻塞起号': start, '阻塞止号': end, '依据': detail}
 
 
-def _apply_batch(conn, batch, events):
+def _apply_batch(conn, batch, events, failpoint=None):
     duplicates = []
     progress = []
     with conn.begin():
@@ -188,6 +188,10 @@ def _apply_batch(conn, batch, events):
                 offset = event['seq']
             if offset != previous:
                 store.advance_offset(conn, stream, offset)
+                # 位点 SQL 已执行、事务尚未提交时的故障注入点，供回滚验收使用。
+                if failpoint is not None:
+                    failpoint({'conn': conn, 'batch': batch, 'stream': stream,
+                               'previous_offset': previous, 'offset': offset})
             progress.append({'到货批号': batch, '原位点': previous, '提交事件数': offset - previous,
                              **_offset_row(stream, offset, waiting[offset - previous:])})
     return duplicates, progress
@@ -210,14 +214,15 @@ def _event_row(event):
             '依据': event['reason'] or ('已随位点提交' if state == 'applied' else '等待本流解除前序阻塞')}
 
 
-def solve(payload, engine):
+def replay(payload, engine, failpoint=None):
+    """在会话级临时表中回放整个档案；failpoint 可在批次事务提交前注入故障。"""
     validate(payload)
     duplicates = []
     progress = []
     with store.isolated_replay(engine) as conn:
         store.initialize(conn, payload['checkpoints'], payload['snapshot'])
         for batch, events in groupby(_arrival_events(payload['events']), key=itemgetter('batch_no')):
-            repeated, committed = _apply_batch(conn, batch, list(events))
+            repeated, committed = _apply_batch(conn, batch, list(events), failpoint=failpoint)
             duplicates.extend(repeated)
             progress.extend(committed)
         with conn.begin():
@@ -226,6 +231,11 @@ def solve(payload, engine):
             signs = [{'分区流': row['stream'], '牌面编号': row['sign_id'],
                       '当前内容': row['content'], '来源序号': row['seq']} for row in store.read_projection(conn)]
             journal = store.read_journal(conn)
+    return duplicates, progress, offsets, signs, journal
+
+
+def solve(payload, engine):
+    duplicates, progress, offsets, signs, journal = replay(payload, engine)
     events = [_event_row(event) for event in sorted([*journal, *duplicates], key=itemgetter('batch_no', 'receipt'))]
     metrics = {
         '已提交事件数': sum(row['state'] == 'applied' for row in journal),
